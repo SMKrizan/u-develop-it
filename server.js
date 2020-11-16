@@ -4,6 +4,9 @@ const express = require('express');
 // enables connection to and SQL command execution via SQLite3 database, setting execution mode to 'verbose()' to produce messages in terminal regarding state of runtime which helps explain what SQLite component of app is doing
 const sqlite3 = require('sqlite3').verbose();
 
+// local modules============================================================================================
+const inputCheck = require('./utils/inputCheck');
+
 //==========================================================================================================
 // sets environment variable for host to access/run app
 const PORT = process.env.PORT || 3001;
@@ -47,7 +50,7 @@ app.get('/api/candidates/:id', (req, res) => {
     const sql = `SELECT * FROM candidates WHERE id = ?`;
     const params = [req.params.id];
     db.get(sql, params, (err, row) => {
-        if(err) {
+        if (err) {
             res.status(400).json({ error: err.message });
             return;
         }
@@ -62,7 +65,7 @@ app.get('/api/candidates/:id', (req, res) => {
 app.delete('/api/candidates/:id', (req, res) => {
     const sql = `DELETE FROM candidates WHERE id = ?`;
     const params = [req.params.id];
-    db.run(sql, params, function(err, result) {
+    db.run(sql, params, function (err, result) {
         if (err) {
             res.status(400).json({ error: res.message });
             return;
@@ -75,15 +78,31 @@ app.delete('/api/candidates/:id', (req, res) => {
 });
 
 // create a candidate;
-// const sql = `INSERT INTO candidates (id, first_name, last_name, industry_connected) VALUES (?, ?, ?, ?)`;
-// const params = [1, 'Ronald', 'Firbank', 1];
-// // ES5 function, not arrow function, to use this
-// db.run(sql, params, function(err, result) {
-//     if(err) {
-//         console.log(err);
-//     }
-//     console.log(result, this.lastID);
-// });
+app.post('/api/candidate', ({ body }, res) => {
+    const errors = inputCheck(body, 'first_name', 'last_name', 'industry_connected');
+    if (errors) {
+        res.status(400).json({ error: errors });
+        return;
+    }
+    // database call for candidate creation
+    const sql = `INSERT INTO candidates (first_name, last_name, industry_connected) VALUES (?, ?, ?)`;
+    // user data collected in req.body
+    const params = [body.first_name, body.last_name, body.industry_connected];
+    // 'run()' method allows execution of prepared SQL statement bound to 'this' (ES5 function, not arrow function, to use 'this')
+    db.run(sql, params, function (err, result) {
+        // response
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success',
+            data: body,
+            id: this.lastID
+        });
+    });
+});
+
 
 // default response (400: Not Found) for any other requests; make sure this follows all others 
 app.use((req, res) => {
