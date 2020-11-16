@@ -31,7 +31,11 @@ const db = new sqlite3.Database('./db/election.db', err => {
 
 // returns all data in candidate table using db.all() method; the callback function captures responses from the query in two variables: 'err'reports null if no errors, and 'rows' is the db query response; this method is the key component that allows SQL commands to be written in a Node.js application
 app.get('/api/candidates', (req, res) => {
-    const sql = `SELECT * FROM candidates`;
+    const sql = `SELECT candidates.*, parties.name
+                AS party_name
+                FROM candidates
+                LEFT JOIN parties
+                ON candidates.party_id = parties.id`;
     const params = [];
     db.all(sql, params, (err, rows) => {
         if (err) {
@@ -47,7 +51,12 @@ app.get('/api/candidates', (req, res) => {
 
 // get a single candidate
 app.get('/api/candidates/:id', (req, res) => {
-    const sql = `SELECT * FROM candidates WHERE id = ?`;
+    const sql = `SELECT candidates.*, parties.name
+                AS party_name
+                FROM candidates
+                LEFT JOIN parties
+                ON candidates.party_id = parties.id
+                WHERE candidates.id = ?`;
     const params = [req.params.id];
     db.get(sql, params, (err, row) => {
         if (err) {
