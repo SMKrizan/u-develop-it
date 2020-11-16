@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: false }));
 // parses JSON data into req.body object
 app.use(express.json());
 
-// routes =================================================================================================
+// GET routes =================================================================================================
 // connects application to SQLite database
 const db = new sqlite3.Database('./db/election.db', err => {
     if (err) {
@@ -50,7 +50,7 @@ app.get('/api/candidates', (req, res) => {
 });
 
 // get a single candidate
-app.get('/api/candidates/:id', (req, res) => {
+app.get('/api/candidate/:id', (req, res) => {
     const sql = `SELECT candidates.*, parties.name
                 AS party_name
                 FROM candidates
@@ -70,8 +70,41 @@ app.get('/api/candidates/:id', (req, res) => {
     });
 });
 
+// display all parties
+app.get('/api/parties', (req, res) => {
+    const sql = `SELECT * FROM parties`;
+    const params = [];
+    db.all(sql, params, (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success',
+            data: rows
+        });
+    });
+});
+
+// display an individual party
+app.get('/api/party/:id', (req, res) => {
+    const sql = `SELECT * FROM parties WHERE id = ?`;
+    const params = [req.params.id];
+    db.get(sql, params, (err, row) => {
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        res.json({ 
+            message: 'success',
+            data: row
+        });
+    });
+});
+
+// DELETE routes =================================================================================================
 // deletes a candidate; the 'run()' method will execute SQL query but not retrieve results; "?" is placeholder; the hard-coded "1" is an additional "param" argument provided to the placeholder (param arguments may also represent an array of values)
-app.delete('/api/candidates/:id', (req, res) => {
+app.delete('/api/candidate/:id', (req, res) => {
     const sql = `DELETE FROM candidates WHERE id = ?`;
     const params = [req.params.id];
     db.run(sql, params, function (err, result) {
@@ -86,6 +119,19 @@ app.delete('/api/candidates/:id', (req, res) => {
     });
 });
 
+app.delete('/api/party/:id', (req, res) => {
+    const sql = `DELETE FROM parties WHERE id = ?`
+    const params = [req.params.id];
+    db.run(sql, params, function(err, result) {
+        if (err) {
+            res.status(400).json({ error: res.message });
+            return;
+        }
+        res.json({ message: 'successfully deleted', changes: this.changes });
+    });
+});
+
+// POST routes =================================================================================================
 // create a candidate;
 app.post('/api/candidate', ({ body }, res) => {
     const errors = inputCheck(body, 'first_name', 'last_name', 'industry_connected');
@@ -112,6 +158,31 @@ app.post('/api/candidate', ({ body }, res) => {
     });
 });
 
+// PUT routes =================================================================================================
+// whereas the affected table should always be a part of the route --> candidates...
+app.put('/api/candidate/:id', (req, res) => {
+    // forces PUT request to include party_id property
+    const errors = inputCheck(req.body, 'party_id');
+        if (errors) {
+            res.status(400).json({ error: errors });
+            return;
+        }
+    const sql = `UPDATE candidates SET party_id = ?
+                WHERE id = ?`;
+    // ...the actual fields being updated should be part of the body --> parties.
+    const params = [req.body.party_id, req.params.id];
+    db.run(sql, params, function(err, result) {
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        res.json({
+            message: 'success',
+            data: req.body,
+            changes: this.changes
+        });
+    });
+});
 
 // default response (400: Not Found) for any other requests; make sure this follows all others 
 app.use((req, res) => {
