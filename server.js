@@ -1,188 +1,22 @@
 // npm packages ============================================================================================
-// facilitates communication between front and back end
 const express = require('express');
-// enables connection to and SQL command execution via SQLite3 database, setting execution mode to 'verbose()' to produce messages in terminal regarding state of runtime which helps explain what SQLite component of app is doing
-const sqlite3 = require('sqlite3').verbose();
-
 // local modules============================================================================================
-const inputCheck = require('./utils/inputCheck');
-
+const db = require('./db/database.js');
 //==========================================================================================================
 // sets environment variable for host to access/run app
 const PORT = process.env.PORT || 3001;
 // server instantiation
 const app = express();
 
+const apiRoutes = require('./routes/apiRoutes');
+
 // express middleware=======================================================================================
 // converts incoming data into key:value pairings; "false" indicates data in a single layer (no nested data)
 app.use(express.urlencoded({ extended: false }));
 // parses JSON data into req.body object
 app.use(express.json());
-
-// GET routes =================================================================================================
-// connects application to SQLite database
-const db = new sqlite3.Database('./db/election.db', err => {
-    if (err) {
-        return console.error(err.message);
-    }
-
-    console.log('Connected to the election database.');
-});
-
-// returns all data in candidate table using db.all() method; the callback function captures responses from the query in two variables: 'err'reports null if no errors, and 'rows' is the db query response; this method is the key component that allows SQL commands to be written in a Node.js application
-app.get('/api/candidates', (req, res) => {
-    const sql = `SELECT candidates.*, parties.name
-                AS party_name
-                FROM candidates
-                LEFT JOIN parties
-                ON candidates.party_id = parties.id`;
-    const params = [];
-    db.all(sql, params, (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        res.json({
-            message: 'success',
-            data: rows
-        });
-    });
-});
-
-// get a single candidate
-app.get('/api/candidate/:id', (req, res) => {
-    const sql = `SELECT candidates.*, parties.name
-                AS party_name
-                FROM candidates
-                LEFT JOIN parties
-                ON candidates.party_id = parties.id
-                WHERE candidates.id = ?`;
-    const params = [req.params.id];
-    db.get(sql, params, (err, row) => {
-        if (err) {
-            res.status(400).json({ error: err.message });
-            return;
-        }
-        res.json({
-            message: 'success',
-            data: row
-        });
-    });
-});
-
-// display all parties
-app.get('/api/parties', (req, res) => {
-    const sql = `SELECT * FROM parties`;
-    const params = [];
-    db.all(sql, params, (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        res.json({
-            message: 'success',
-            data: rows
-        });
-    });
-});
-
-// display an individual party
-app.get('/api/party/:id', (req, res) => {
-    const sql = `SELECT * FROM parties WHERE id = ?`;
-    const params = [req.params.id];
-    db.get(sql, params, (err, row) => {
-        if (err) {
-            res.status(400).json({ error: err.message });
-            return;
-        }
-        res.json({ 
-            message: 'success',
-            data: row
-        });
-    });
-});
-
-// DELETE routes =================================================================================================
-// deletes a candidate; the 'run()' method will execute SQL query but not retrieve results; "?" is placeholder; the hard-coded "1" is an additional "param" argument provided to the placeholder (param arguments may also represent an array of values)
-app.delete('/api/candidate/:id', (req, res) => {
-    const sql = `DELETE FROM candidates WHERE id = ?`;
-    const params = [req.params.id];
-    db.run(sql, params, function (err, result) {
-        if (err) {
-            res.status(400).json({ error: res.message });
-            return;
-        }
-        res.json({
-            message: 'successfully deleted',
-            changes: this.changes
-        });
-    });
-});
-
-app.delete('/api/party/:id', (req, res) => {
-    const sql = `DELETE FROM parties WHERE id = ?`
-    const params = [req.params.id];
-    db.run(sql, params, function(err, result) {
-        if (err) {
-            res.status(400).json({ error: res.message });
-            return;
-        }
-        res.json({ message: 'successfully deleted', changes: this.changes });
-    });
-});
-
-// POST routes =================================================================================================
-// create a candidate;
-app.post('/api/candidate', ({ body }, res) => {
-    const errors = inputCheck(body, 'first_name', 'last_name', 'industry_connected');
-    if (errors) {
-        res.status(400).json({ error: errors });
-        return;
-    }
-    // database call for candidate creation
-    const sql = `INSERT INTO candidates (first_name, last_name, industry_connected) VALUES (?, ?, ?)`;
-    // user data collected in req.body
-    const params = [body.first_name, body.last_name, body.industry_connected];
-    // 'run()' method allows execution of prepared SQL statement bound to 'this' (ES5 function, not arrow function, to use 'this')
-    db.run(sql, params, function (err, result) {
-        // response
-        if (err) {
-            res.status(400).json({ error: err.message });
-            return;
-        }
-        res.json({
-            message: 'success',
-            data: body,
-            id: this.lastID
-        });
-    });
-});
-
-// PUT routes =================================================================================================
-// whereas the affected table should always be a part of the route --> candidates...
-app.put('/api/candidate/:id', (req, res) => {
-    // forces PUT request to include party_id property
-    const errors = inputCheck(req.body, 'party_id');
-        if (errors) {
-            res.status(400).json({ error: errors });
-            return;
-        }
-    const sql = `UPDATE candidates SET party_id = ?
-                WHERE id = ?`;
-    // ...the actual fields being updated should be part of the body --> parties.
-    const params = [req.body.party_id, req.params.id];
-    db.run(sql, params, function(err, result) {
-        if (err) {
-            res.status(400).json({ error: err.message });
-            return;
-        }
-        res.json({
-            message: 'success',
-            data: req.body,
-            changes: this.changes
-        });
-    });
-});
+// accepts and redirects for api routes
+app.use('/api', apiRoutes);
 
 // default response (400: Not Found) for any other requests; make sure this follows all others 
 app.use((req, res) => {
